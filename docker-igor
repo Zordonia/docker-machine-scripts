@@ -1,0 +1,162 @@
+#!/usr/local/bin/python
+
+import copy
+import io
+import os
+import re
+from subprocess import call, Popen
+import sys
+import time
+
+import argparse
+import yaml
+
+
+path = re.sub("[^a-zA-Z\d\s:]",
+              '',
+              os.getcwd().split('/')[-1]) \
+    .lower()
+
+ON_POSIX = 'posix' in sys.builtin_module_names
+
+
+parser = argparse.ArgumentParser(description='Decompose docker-compose.')
+
+parser.add_argument(
+    'image',
+    default=None,
+    type=str,
+    help='The image that you would like your docker-file decomposed into.')
+
+parser.add_argument(
+    'command',
+    default='up',
+    type=str,
+    choices=['up', 'build', 'build_all', 'up_all', 'down'],
+    help='The command to run after decomposition. If \'all\' is supplied' +
+    ' the program runs the command first for the persistent images, then' +
+    ' for the \'image\' composition.')
+
+args = parser.parse_args()
+
+image = args.image
+docker_compose = None
+persist_fname = 'docker-compose-stravinsky.yml'
+local_fname = 'docker-compose-igor.yml'
+links = []
+with open('docker-compose.yml', 'r') as stream:
+    docker_compose = yaml.load(stream)
+    links = docker_compose.get(image, {}).get('links', [])
+
+
+def find_links(name):
+    links = filter(
+        lambda x: name in x[1].get('links', []), docker_compose.items())
+    return links
+
+
+def get_image_by_name(name):
+    composition = filter(
+        lambda x: name == x[0], docker_compose.items())
+    return composition
+
+
+def transform_link_name(link_name, docker_compose):
+    if link_name in docker_compose:
+        return link_name
+    return '_'.join([path, link_name, '1']) + ':' + link_name
+
+
+def create_local_docker_compose(persist_file_name, file_name):
+    links = find_links(image)
+
+    images_to_add = copy.deepcopy(links)
+    while len(links) > 0:
+        link = links.pop()
+
+        new_links = find_links(link[0])
+        for new_link in new_links:
+            if new_link[0] not in [x[0] for x in images_to_add]:
+                images_to_add.append(new_link)
+                links.append(new_link)
+
+    for i in images_to_add:
+        volumes = i[1].get('volumes_from', None)
+        if volumes:
+            for v in volumes:
+                images_to_add.extend(get_image_by_name(v))
+
+    with open(file_name, 'w') as compose, \
+            open(persist_file_name, 'w') as compose_persist:
+        composition = {}
+
+        decomposition = copy.deepcopy(docker_compose)
+        decomposition.pop(image)
+        for i in images_to_add:
+            name = i[0]
+            composition[name] = i[1]
+            decomposition.pop(name)
+        composition[image] = docker_compose.get(image, None)
+        links = composition[image].pop('links', None)
+        if links:
+            composition[image]['external_links'] = composition[
+                image].get('external_links', [])
+            composition[image]['external_links'].extend(links)
+
+        for k, value in composition.items():
+            links = value.get('external_links', [])
+            transformed_links = []
+            for link in links:
+                transformed_links.append(
+                    transform_link_name(
+                        link,
+                        composition))
+            composition[k]['external_links'] = transformed_links
+        compose_persist.write(yaml.dump(decomposition))
+        compose.write(yaml.dump(composition))
+
+
+def run_multi_process(args_lists, wait):
+    input_fd, output_fd = os.pipe()
+
+    # Start the processes with wait
+    processes = []
+    for args in args_lists:
+        if args[2] == local_fname:
+            processes.append(Popen(args,
+                                   stdout=output_fd,
+                                   close_fds=ON_POSIX))
+        else:
+            processes.append(Popen(args,
+                                   close_fds=ON_POSIX))
+        time.sleep(wait)
+
+    os.close(output_fd)
+
+    # read output line by line as soon as it is available
+    with io.open(input_fd, 'r', buffering=1) as file:
+        for line in file:
+            print(line)
+
+    for p in processes:
+        p.wait()
+
+
+create_local_docker_compose(
+    persist_fname, local_fname)
+if args.command == 'up':
+    call(['docker-compose', '-f', local_fname, 'up'])
+    pass
+elif args.command == 'up_all':
+    run_multi_process([['docker-compose', '-f', persist_fname, 'up'],
+                       ['docker-compose', '-f', local_fname, 'up']],
+                      5)
+    pass
+elif args.command == 'build':
+    call(['docker-compose', '-f', local_fname, 'build'])
+    pass
+elif args.command == 'build_all':
+    run_multi_process([['docker-compose', '-f', persist_fname, 'build'],
+                       ['docker-compose', '-f', local_fname, 'build']],
+                      1)
+    pass
