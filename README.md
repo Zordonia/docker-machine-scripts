@@ -1,16 +1,16 @@
 ## Using utility scripts
 
-The /scripts/docker-machine-scripts.bash file contains useful scripts for docker-machine
+The docker-machine-scripts.bash file contains useful scripts for docker-machine
 
 ### Source the script file
 
-    source scripts/docker-machine-scripts.bash
+    source docker-machine-scripts.bash
 
 OR add the source to your ~/.bash_profile 
 
     #!/usr/bin/env bash
     ...
-    source ~/path/to/repository/scripts/docker-machine-scripts.bash
+    source ~/path/to/repository/docker-machine-scripts.bash
 
 ### Adding default docker-machine
 
