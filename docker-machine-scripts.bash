@@ -319,17 +319,5 @@ docker-ssh() {
 }
 
 docker-login () {
-  eval $(AWS_PROFILE=bnproducts aws ecr get-login)
-}
-
-docker-move () {
-  registry2="$1"
-  docker pull $registry2
-
-  repo_name=$(echo $registry2 | awk '{gsub("registry2.bn.co/","", $0); printf $0;}')
-  tagless=$(echo $repo_name | awk '{gsub(":.*$","", $0); printf $0;}')
-
-  docker tag $registry2 396514920776.dkr.ecr.us-east-1.amazonaws.com/$repo_name
-  AWS_PROFILE=bnproducts aws ecr create-repository --region us-east-1 --repository-name $tagless
-  docker push 396514920776.dkr.ecr.us-east-1.amazonaws.com/$repo_name
+  eval $(AWS_PROFILE=$AWS_PROFILE aws ecr get-login)
 }
