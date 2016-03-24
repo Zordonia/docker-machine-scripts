@@ -124,7 +124,7 @@ Contents of /etc/hosts after script:
 
 #### docker-login
 
-- Will log you into bnproducts ECR registry. Note that this requires that you have the aws-cli installed and configured for bnproducts account.
+- Will log you into $AWS_PROFILE ECR registry. Note that this requires that you have the aws-cli installed and configured for $AWS_PROFILE account.
 
 ## Docker Igor
 
@@ -145,13 +145,3 @@ The available commands are as follows:
    1. Create docker-igor files `docker-igor <image> create`
    2. Run docker-compose up on persistent files `docker-compose -f docker-compose-stravinsky up`
    3. Run docker-compose up on local changing files (potentially rebuilding) `docker-igor <image> up` and/or `docker-igor <image> build`
-
-## Parse Args
-
-- Will parse a clear.yml file from the cluster-builder project. (inventory/{account}/group_vars/all/clear.yml)
-
-Usage:
-
-```
-parse_args {filename} {property.name.one} [{property.name} ... |] [service_name .. |]
-```
